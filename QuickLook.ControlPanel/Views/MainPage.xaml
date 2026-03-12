@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Page
+    x:Class="QuickLook.ControlPanel.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <NavigationView x:Name="NavView"
+                    PaneDisplayMode="Left"
+                    IsBackButtonVisible="Visible"
+                    BackRequested="NavView_BackRequested"
+                    IsSettingsVisible="True"
+                    Header="Quick Look"
+                    Loaded="NavView_Loaded"
+                    ItemInvoked="NavView_ItemInvoked">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="已安装插件" Icon="AllApps" Tag="InstalledPluginsPage" />
+            <NavigationViewItem Content="插件商店" Icon="Shop" Tag="PluginStorePage" />
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="ContentFrame" Margin="24,0,24,24" Navigated="ContentFrame_Navigated" />
+    </NavigationView>
+</Page>
