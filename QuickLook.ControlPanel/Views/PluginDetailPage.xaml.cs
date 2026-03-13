@@ -90,36 +90,72 @@ namespace QuickLook.ControlPanel.Views
                 
                 _coreWebView2 = _controller.CoreWebView2;
 
-                // 5. 立即同步初始位置 (重要：不等待第一次 SizeChanged)
+                // 5. 实时同步位置逻辑
                 void UpdateBounds()
                 {
-                    if (_controller != null)
+                    if (_controller != null && WebViewHost != null)
                     {
-                        var ttv = WebViewHost.TransformToVisual(null);
-                        var point = ttv.TransformPoint(new Windows.Foundation.Point(0, 0));
-                        _controller.Bounds = new Windows.Foundation.Rect(
-                            point.X, 
-                            point.Y, 
-                            Math.Max(1, WebViewHost.ActualWidth), 
-                            Math.Max(1, WebViewHost.ActualHeight));
+                        try 
+                        {
+                            // 获取当前的 DPI 缩放比例
+                            var scale = WebViewHost.XamlRoot?.RasterizationScale ?? 1.0;
+
+                            // 在 WinUI 3 中，相对于 Window.Content 转换通常比 null (屏幕) 更稳健
+                            var ttv = WebViewHost.TransformToVisual(App.Window.Content);
+                            var point = ttv.TransformPoint(new Windows.Foundation.Point(0, 0));
+                            
+                            // 物理像素 = 逻辑像素 * 缩放比例
+                            var left = point.X * scale;
+                            var top = point.Y * scale;
+                            var width = Math.Max(1, WebViewHost.ActualWidth * scale);
+                            var height = Math.Max(1, WebViewHost.ActualHeight * scale);
+
+                            _controller.Bounds = new Windows.Foundation.Rect(left, top, width, height);
+                        }
+                        catch { }
                     }
                 }
                 
+                // 首次强制更新
                 UpdateBounds();
 
-                // 监听容器尺寸变化，同步 HWND 位置
+                // 监听尺寸变化和布局更新，双重保障
                 WebViewHost.SizeChanged += (s, e) => UpdateBounds();
+                WebViewHost.LayoutUpdated += (s, e) => UpdateBounds();
 
                 // 6. 加载插件的 GitHub 仓库页面
                 _coreWebView2.Navigate(_plugin.RepositoryUrl);
 
-                _coreWebView2.NavigationCompleted += (s, e) =>
+                _coreWebView2.NavigationCompleted += async (s, e) =>
                 {
                     LoadingArea.Visibility = Visibility.Collapsed;
                     LoadingRing.IsActive = false;
                     
                     // 再次强制刷新透明度
                     try { _controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0); } catch { }
+
+                    // 注入 GitHub 透明 CSS
+                    string css = @"
+                        :root, body, .application-main, .bg-canvas, .Box, .Header, .footer {
+                            background-color: transparent !important;
+                            background: transparent !important;
+                        }
+                        [data-color-mode] {
+                            --color-canvas-default: transparent !important;
+                            --color-canvas-subtle: transparent !important;
+                            --color-canvas-inset: transparent !important;
+                        }
+                        /* 隐藏不必要的背景层 */
+                        .Layout-main, .Layout-sidebar {
+                            background-color: transparent !important;
+                        }
+                    ";
+                    string script = $"(function() {{ " +
+                                    $"var style = document.createElement('style'); " +
+                                    $"style.innerHTML = `{css}`; " +
+                                    $"document.head.appendChild(style); " +
+                                    $"}})();";
+                    await _coreWebView2.ExecuteScriptAsync(script);
                 };
             }
             catch (Exception ex)
