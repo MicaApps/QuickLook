@@ -110,8 +110,8 @@ namespace QuickLook.ControlPanel.Views
                 // 监听容器尺寸变化，同步 HWND 位置
                 WebViewHost.SizeChanged += (s, e) => UpdateBounds();
 
-                // 6. 加载 GitHub 主页
-                _coreWebView2.Navigate("https://github.com");
+                // 6. 加载插件的 GitHub 仓库页面
+                _coreWebView2.Navigate(_plugin.RepositoryUrl);
 
                 _coreWebView2.NavigationCompleted += (s, e) =>
                 {
