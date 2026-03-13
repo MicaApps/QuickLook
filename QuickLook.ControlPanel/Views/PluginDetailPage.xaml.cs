@@ -10,10 +10,28 @@ using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Web.WebView2.Core;
 using QuickLook.ControlPanel.Services;
 
+using System.Runtime.InteropServices;
+using WinRT;
+
 namespace QuickLook.ControlPanel.Views
 {
     public sealed partial class PluginDetailPage : Page
     {
+        // Win32 常量和方法
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_LAYERED = 0x80000;
+        private const uint LWA_ALPHA = 0x2;
+        private const uint GW_CHILD = 5;
+
         private StorePluginInfo _plugin = new();
 
         public PluginDetailPage()
@@ -38,6 +56,9 @@ namespace QuickLook.ControlPanel.Views
             }
         }
 
+        private CoreWebView2Controller? _controller;
+        private CoreWebView2? _coreWebView2;
+
         private async void InitializeWebView()
         {
             if (string.IsNullOrEmpty(_plugin.RepositoryUrl))
@@ -49,51 +70,61 @@ namespace QuickLook.ControlPanel.Views
 
             try
             {
-                LoadingStatus.Text = "正在初始化 WebView2 内核...";
+                LoadingStatus.Text = "正在以 HWND 模式初始化内核...";
+
+                // 1. 创建环境 (强制设置透明环境变量)
+                Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "0");
+                var env = await CoreWebView2Environment.CreateAsync();
+
+                // 2. 获取主窗口句柄
+                var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(App.Window);
+                var windowRef = CoreWebView2ControllerWindowReference.CreateFromWindowHandle((ulong)windowHandle);
+
+                // 3. 创建标准的 HWND 控制器 (而不是 Composition)
+                // 这种方式最稳定，且支持内核透明
+                _controller = await env.CreateCoreWebView2ControllerAsync(windowRef);
                 
-                // 照抄官方示例的事件注册
-                RepoWebView.CoreWebView2Initialized += (s, e) => 
+                // 4. 强制设置内核背景为完全透明，并显式设置可见
+                _controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+                _controller.IsVisible = true;
+                
+                _coreWebView2 = _controller.CoreWebView2;
+
+                // 5. 立即同步初始位置 (重要：不等待第一次 SizeChanged)
+                void UpdateBounds()
                 {
-                    Debug.WriteLine("WebView2 Initialized");
-                    if (e.Exception != null)
+                    if (_controller != null)
                     {
-                        LoadingStatus.Text = $"内核初始化失败: {e.Exception.Message}";
-                        return;
+                        var ttv = WebViewHost.TransformToVisual(null);
+                        var point = ttv.TransformPoint(new Windows.Foundation.Point(0, 0));
+                        _controller.Bounds = new Windows.Foundation.Rect(
+                            point.X, 
+                            point.Y, 
+                            Math.Max(1, WebViewHost.ActualWidth), 
+                            Math.Max(1, WebViewHost.ActualHeight));
                     }
+                }
+                
+                UpdateBounds();
+
+                // 监听容器尺寸变化，同步 HWND 位置
+                WebViewHost.SizeChanged += (s, e) => UpdateBounds();
+
+                // 6. 加载 GitHub 主页
+                _coreWebView2.Navigate("https://github.com");
+
+                _coreWebView2.NavigationCompleted += (s, e) =>
+                {
+                    LoadingArea.Visibility = Visibility.Collapsed;
+                    LoadingRing.IsActive = false;
                     
-                    RepoWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-                    RepoWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
-                    LoadingStatus.Text = "内核初始化成功，正在加载页面...";
+                    // 再次强制刷新透明度
+                    try { _controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0); } catch { }
                 };
-
-                RepoWebView.NavigationStarting += (s, e) =>
-                {
-                    LoadingStatus.Text = $"正在导航至: {e.Uri}";
-                };
-
-                RepoWebView.NavigationCompleted += (s, e) =>
-                {
-                    if (e.IsSuccess)
-                    {
-                        LoadingArea.Visibility = Visibility.Collapsed;
-                        LoadingRing.IsActive = false;
-                    }
-                    else
-                    {
-                        LoadingStatus.Text = $"导航失败: {e.WebErrorStatus}";
-                        LoadingRing.IsActive = false;
-                    }
-                };
-
-                // 开始异步初始化
-                await RepoWebView.EnsureCoreWebView2Async();
-
-                // 导航至插件仓库地址
-                RepoWebView.Source = new Uri(_plugin.RepositoryUrl);
             }
             catch (Exception ex)
             {
-                LoadingStatus.Text = $"初始化崩溃: {ex.Message}";
+                LoadingStatus.Text = $"HWND 初始化失败: {ex.Message}";
                 LoadingRing.IsActive = false;
                 Debug.WriteLine($"WebView2 Error: {ex}");
             }

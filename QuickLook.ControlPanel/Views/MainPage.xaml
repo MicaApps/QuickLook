@@ -14,12 +14,13 @@
                     IsSettingsVisible="True"
                     Header="Quick Look"
                     Loaded="NavView_Loaded"
-                    ItemInvoked="NavView_ItemInvoked">
+                    ItemInvoked="NavView_ItemInvoked"
+                    Background="Transparent">
         <NavigationView.MenuItems>
             <NavigationViewItem Content="已安装插件" Icon="AllApps" Tag="InstalledPluginsPage" />
             <NavigationViewItem Content="插件商店" Icon="Shop" Tag="PluginStorePage" />
         </NavigationView.MenuItems>
 
-        <Frame x:Name="ContentFrame" Margin="24,0,24,24" Navigated="ContentFrame_Navigated" />
+        <Frame x:Name="ContentFrame" Margin="24,0,24,24" Navigated="ContentFrame_Navigated" Background="Transparent" />
     </NavigationView>
 </Page>

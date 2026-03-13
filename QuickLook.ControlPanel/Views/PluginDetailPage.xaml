@@ -5,15 +5,16 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:md="using:CommunityToolkit.WinUI.UI.Controls"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    Background="Transparent">
 
-    <Grid>
+    <Grid Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}" Padding="20,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}">
+        <Border Grid.Row="0" Background="Transparent" Padding="20,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource SystemControlForegroundBaseLowBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -48,11 +49,15 @@
             </Grid>
         </Border>
 
-        <WebView2 x:Name="RepoWebView" Grid.Row="1" Visibility="Visible" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-        
-        <StackPanel x:Name="LoadingArea" Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-            <ProgressRing x:Name="LoadingRing" IsActive="True" Width="60" Height="60" Margin="0,0,0,10" />
-            <TextBlock x:Name="LoadingStatus" Text="正在加载详情..." HorizontalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseMediumLowBrush}" />
-        </StackPanel>
+        <!-- 诊断用的红色背景容器 -->
+        <Grid Grid.Row="1" Background="Red" Padding="50">
+            <!-- 我们不再使用 WebView2 控件，而是使用一个空的 Border 作为宿主容器 -->
+            <Border x:Name="WebViewHost" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+            
+            <StackPanel x:Name="LoadingArea" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ProgressRing x:Name="LoadingRing" IsActive="True" Width="60" Height="60" Margin="0,0,0,10" />
+                <TextBlock x:Name="LoadingStatus" Text="正在加载详情..." HorizontalAlignment="Center" Foreground="White" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>
