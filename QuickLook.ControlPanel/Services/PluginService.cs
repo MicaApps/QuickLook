@@ -67,76 +67,70 @@ namespace QuickLook.ControlPanel.Services
         private List<StorePluginInfo> ParseWikiHtml(HtmlDocument doc)
         {
             var plugins = new List<StorePluginInfo>();
-            var wikiBody = doc.DocumentNode.SelectSingleNode("//div[@id='wiki-body']");
-            if (wikiBody == null) return plugins;
-
-            // 仅使用方法 1: 解析三行一组的插件信息
-            // 这种模式通常出现在 *1: Native installation only 之前
-            var wikiText = wikiBody.InnerText;
-            var stopText = "*1: Native installation only";
-            int stopIndex = wikiText.IndexOf(stopText, StringComparison.OrdinalIgnoreCase);
-            var scanText = stopIndex > 0 ? wikiText.Substring(0, stopIndex) : wikiText;
-
-            // 使用正则直接匹配三行一组的模式，提高健壮性
-            // 模式：[名称/文本]: [GitHub链接] \n [Release/文本]: [下载链接]
-            // 注意：有些行可能包含额外的空格或符号
-            var pattern = @"([^\n\r:]+):?\s*\[?(https?://github\.com/[^\s\]\)\>]+)\]?\s*[\r\n]+\s*([^\n\r:]+release[^\n\r:]*):?\s*\[?(https?://github\.com/[^\s\]\)\>]+)\]?";
-            var matches = Regex.Matches(scanText, pattern, RegexOptions.IgnoreCase);
-
-            foreach (Match match in matches)
+            
+            // 优先解析表格 (Wiki 中最新的插件通常在表格里)
+            var rows = doc.DocumentNode.SelectNodes("//div[@id='wiki-body']//table/tbody/tr");
+            if (rows != null)
             {
-                string name = match.Groups[1].Value.Trim();
-                string repoUrl = match.Groups[2].Value.Trim();
-                string downloadUrl = match.Groups[4].Value.Trim();
-
-                if (IsValidGitHubRepo(repoUrl))
+                foreach (var row in rows)
                 {
-                    plugins.Add(new StorePluginInfo
+                    var cells = row.SelectNodes("td");
+                    if (cells != null && cells.Count >= 3)
                     {
-                        Name = name,
-                        RepositoryUrl = CleanUrl(repoUrl),
-                        DownloadUrl = CleanUrl(downloadUrl),
-                        Description = "社区插件",
-                        LastUpdate = "未知"
-                    });
+                        var nameNode = cells[0].SelectSingleNode("a") ?? cells[0];
+                        var name = nameNode.InnerText.Trim();
+                        var repoUrl = nameNode.GetAttributeValue("href", "");
+                        var date = cells[1].InnerText.Trim();
+                        var downloadNode = cells[2].SelectSingleNode("a");
+                        var downloadUrl = downloadNode?.GetAttributeValue("href", "");
+                        var description = cells.Count > 3 ? cells[3].InnerText.Trim() : "";
+
+                        if (IsValidGitHubRepo(repoUrl))
+                        {
+                            plugins.Add(new StorePluginInfo
+                            {
+                                Name = name,
+                                LastUpdate = date,
+                                RepositoryUrl = CleanUrl(repoUrl),
+                                DownloadUrl = CleanUrl(downloadUrl ?? ""),
+                                Description = description
+                            });
+                        }
+                    }
                 }
             }
 
-            // 如果正则没匹配到，尝试之前的行拆分逻辑作为备选（保持兼容性）
-            if (!plugins.Any())
+            // 如果表格解析没结果，或者想补充之前的“三行一组”文本模式
+            if (plugins.Count < 5)
             {
-                var lines = scanText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
-                                   .Select(l => l.Trim())
-                                   .Where(l => !string.IsNullOrWhiteSpace(l))
-                                   .ToList();
-
-                for (int i = 0; i < lines.Count - 1; i++)
+                var wikiBody = doc.DocumentNode.SelectSingleNode("//div[@id='wiki-body']");
+                if (wikiBody != null)
                 {
-                    var line1 = lines[i];
-                    var line2 = lines[i + 1];
+                    var wikiText = wikiBody.InnerText;
+                    var stopText = "*1: Native installation only";
+                    int stopIndex = wikiText.IndexOf(stopText, StringComparison.OrdinalIgnoreCase);
+                    var scanText = stopIndex > 0 ? wikiText.Substring(0, stopIndex) : wikiText;
 
-                    if (line1.Contains("github.com", StringComparison.OrdinalIgnoreCase) && 
-                        !line1.Contains("release", StringComparison.OrdinalIgnoreCase))
+                    // 之前的正则模式
+                    var pattern = @"([^\n\r:]+):?\s*\[?(https?://github\.com/[^\s\]\)\>]+)\]?\s*[\r\n]+\s*([^\n\r:]+release[^\n\r:]*):?\s*\[?(https?://github\.com/[^\s\]\)\>]+)\]?";
+                    var matches = Regex.Matches(scanText, pattern, RegexOptions.IgnoreCase);
+
+                    foreach (Match match in matches)
                     {
-                        if (line2.Contains("release", StringComparison.OrdinalIgnoreCase) && 
-                            line2.Contains("github.com", StringComparison.OrdinalIgnoreCase))
-                        {
-                            string repoUrl = ExtractUrl(line1);
-                            string downloadUrl = ExtractUrl(line2);
+                        string name = match.Groups[1].Value.Trim();
+                        string repoUrl = match.Groups[2].Value.Trim();
+                        string downloadUrl = match.Groups[4].Value.Trim();
 
-                            if (IsValidGitHubRepo(repoUrl))
+                        if (IsValidGitHubRepo(repoUrl) && !plugins.Any(p => p.RepositoryUrl == CleanUrl(repoUrl)))
+                        {
+                            plugins.Add(new StorePluginInfo
                             {
-                                string name = line1.Split(new[] { ':', '[', '(' }, StringSplitOptions.RemoveEmptyEntries)[0].Trim();
-                                plugins.Add(new StorePluginInfo
-                                {
-                                    Name = name,
-                                    RepositoryUrl = CleanUrl(repoUrl),
-                                    DownloadUrl = CleanUrl(downloadUrl),
-                                    Description = "社区插件",
-                                    LastUpdate = "未知"
-                                });
-                                i++;
-                            }
+                                Name = name,
+                                RepositoryUrl = CleanUrl(repoUrl),
+                                DownloadUrl = CleanUrl(downloadUrl),
+                                Description = "社区插件",
+                                LastUpdate = "未知"
+                            });
                         }
                     }
                 }
