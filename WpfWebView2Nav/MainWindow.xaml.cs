@@ -253,6 +253,7 @@ public partial class MainWindow : Window
         {
             DetailPlaceholder.Visibility = Visibility.Collapsed;
             detailWebView.Visibility = Visibility.Visible;
+            InstallButton.Visibility = Visibility.Visible;
             detailWebView.Source = new Uri(selectedPlugin.RepoUrl);
         }
     }
@@ -279,6 +280,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void InstallButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (PluginListView.SelectedItem is PluginItem selectedPlugin)
+        {
+            // 这里可以添加真正的安装逻辑，比如从 GitHub Release 下载 .qlplugin 文件并运行
+            // 目前先显示一个提示
+            ContentDialog dialog = new ContentDialog
+            {
+                Title = "准备安装",
+                Content = $"即将安装插件: {selectedPlugin.Name}\n存储库: {selectedPlugin.RepoUrl}\n\n注意：目前尚未实现自动下载，您可以点击“在浏览器中打开”并从 Release 页面下载 .qlplugin 文件。",
+                PrimaryButtonText = "确定",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            await dialog.ShowAsync();
+        }
+    }
+
     private void detailWebView_NavigationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
     {
         if (ShowReadmeButton.IsChecked == true)
@@ -293,35 +312,53 @@ public partial class MainWindow : Window
 
         // 更加激进的 CSS：先隐藏所有内容，然后只显示 README 路径上的元素
         string css = @"
-            /* 1. 默认隐藏所有直接子元素 */
-            body > *:not(style):not(script) {
+            /* 1. 只有在 readme 模式下才应用这些样式 */
+            .ql-readme-mode body > *:not(style):not(script):not(.ql-readme-container) {
                 display: none !important;
             }
 
             /* 2. 强制背景透明 */
-            html, body {
+            html.ql-readme-mode, body.ql-readme-mode {
                 background-color: transparent !important;
                 background: transparent !important;
                 overflow-x: hidden !important;
             }
 
             /* 3. 这里的逻辑由 JS 动态处理，CSS 负责兜底隐藏一些顽固元素 */
-            .AppHeader, .Box-header, .file-navigation, .Layout-sidebar, #repository-container-header {
+            .ql-readme-mode .AppHeader, 
+            .ql-readme-mode .Box-header, 
+            .ql-readme-mode .file-navigation, 
+            .ql-readme-mode .Layout-sidebar, 
+            .ql-readme-mode #repository-container-header {
                 display: none !important;
             }
 
             /* 4. README 样式美化 */
-            .markdown-body {
+            .ql-readme-mode .markdown-body {
                 background-color: transparent !important;
                 color: #e6edf3 !important;
                 padding: 40px !important;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif !important;
             }
 
-            /* 移除所有边距和边框 */
-            * {
-                border-color: transparent !important;
+            /* 修复标题下划线，使用 GitHub 默认的深色模式边框色 */
+            .ql-readme-mode .markdown-body h1, 
+            .ql-readme-mode .markdown-body h2 {
+                border-bottom: 1px solid #30363d !important;
+                padding-bottom: .3em !important;
+            }
+
+            /* 辅助类 */
+            .ql-hide { display: none !important; }
+            .ql-transparent-container {
+                background: transparent !important;
+                background-color: transparent !important;
+                border: none !important;
                 box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
             }
         ";
 
@@ -334,51 +371,31 @@ public partial class MainWindow : Window
                     document.head.appendChild(style);
                 }}
                 style.innerHTML = `{css}`;
+                document.body.classList.add('ql-readme-mode');
+                document.documentElement.classList.add('ql-readme-mode');
 
                 function cleanup() {{
+                    if (!document.body.classList.contains('ql-readme-mode')) return;
+                    
                     var readme = document.getElementById('readme') || document.querySelector('.markdown-body');
                     if (readme) {{
-                        // 隐藏 README 之前的所有兄弟节点（即文件列表等）
-                        var prev = readme.previousElementSibling;
-                        while (prev) {{
-                            prev.style.setProperty('display', 'none', 'important');
-                            prev = prev.previousElementSibling;
-                        }}
-
-                        // 隐藏 README 之后的所有兄弟节点
-                        var next = readme.nextElementSibling;
-                        while (next) {{
-                            next.style.setProperty('display', 'none', 'important');
-                            next = next.nextElementSibling;
-                        }}
-
-                        // 递归向上，隐藏父节点的所有其他兄弟
+                        // 标记路径上的容器
                         var node = readme;
                         while (node && node.parentElement && node.parentElement !== document.body) {{
                             var parent = node.parentElement;
+                            parent.classList.add('ql-readme-container');
+                            parent.classList.add('ql-transparent-container');
+                            
+                            // 隐藏同级节点
                             var siblings = parent.children;
                             for (var i = 0; i < siblings.length; i++) {{
-                                if (siblings[i] !== node && siblings[i].tagName !== 'STYLE') {{
-                                    siblings[i].style.setProperty('display', 'none', 'important');
+                                if (siblings[i] !== node && siblings[i].tagName !== 'STYLE' && !siblings[i].classList.contains('ql-readme-container')) {{
+                                    siblings[i].classList.add('ql-hide');
                                 }}
                             }}
-                            // 移除父容器的背景和边框
-                            parent.style.setProperty('background', 'transparent', 'important');
-                            parent.style.setProperty('background-color', 'transparent', 'important');
-                            parent.style.setProperty('border', 'none', 'important');
-                            parent.style.setProperty('box-shadow', 'none', 'important');
-                            parent.style.setProperty('padding', '0', 'important');
-                            parent.style.setProperty('margin', '0', 'important');
-                            parent.style.setProperty('width', '100%', 'important');
-                            parent.style.setProperty('max-width', '100%', 'important');
-                            
                             node = parent;
                         }}
-                        
-                        // 确保最外层容器也是显示的
-                        if (node) node.style.setProperty('display', 'block', 'important');
                     }}
-                    document.body.style.setProperty('background', 'transparent', 'important');
                 }}
 
                 // 立即执行一次
@@ -387,6 +404,10 @@ public partial class MainWindow : Window
                 // 定时执行几次，防止 GitHub 动态加载回流
                 var count = 0;
                 var timer = setInterval(function() {{
+                    if (!document.body.classList.contains('ql-readme-mode')) {{
+                        clearInterval(timer);
+                        return;
+                    }}
                     cleanup();
                     if (++count > 10) clearInterval(timer);
                 }}, 500);
@@ -401,10 +422,33 @@ public partial class MainWindow : Window
         if (detailWebView.CoreWebView2 == null) return;
 
         string js = @"
-            var style = document.getElementById('readme-custom-style');
-            if (style) {
-                style.remove();
-            }
+            (function() {
+                // 1. 移除模式标记
+                document.body.classList.remove('ql-readme-mode');
+                document.documentElement.classList.remove('ql-readme-mode');
+                
+                // 2. 移除注入的样式
+                var style = document.getElementById('readme-custom-style');
+                if (style) style.remove();
+                
+                // 3. 恢复所有被隐藏的元素
+                document.querySelectorAll('.ql-hide').forEach(el => el.classList.remove('ql-hide'));
+                document.querySelectorAll('.ql-transparent-container').forEach(el => el.classList.remove('ql-transparent-container'));
+                document.querySelectorAll('.ql-readme-container').forEach(el => el.classList.remove('ql-readme-container'));
+                
+                // 4. 彻底清理可能残留的 inline styles（针对旧版本的清理）
+                var elements = document.querySelectorAll('[style*=""display: none""]');
+                elements.forEach(function(el) {
+                    el.style.removeProperty('display');
+                });
+                
+                // 恢复背景
+                document.body.style.removeProperty('background');
+                document.body.style.removeProperty('background-color');
+                
+                // 强制触发一次重绘
+                window.dispatchEvent(new Event('resize'));
+            })();
         ";
         await detailWebView.CoreWebView2.ExecuteScriptAsync(js);
     }

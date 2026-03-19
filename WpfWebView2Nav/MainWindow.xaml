@@ -116,13 +116,24 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <!-- Command Bar -->
-                        <ui:CommandBar Grid.Row="0" Background="Transparent" HorizontalAlignment="Left" Margin="8,4">
-                            <ui:AppBarToggleButton x:Name="ShowReadmeButton" Icon="Document" Label="显示Readme" IsChecked="True" Click="ShowReadmeButton_Click" />
-                            <ui:AppBarToggleButton x:Name="ShowFullPageButton" Icon="World" Label="显示完整网页" Click="ShowFullPageButton_Click" />
-                            <ui:AppBarSeparator />
-                            <ui:AppBarButton x:Name="OpenInBrowserButton" Icon="OpenWith" Label="在浏览器中打开" Click="OpenInBrowserButton_Click" />
-                        </ui:CommandBar>
+                        <!-- Header with Command Bar and Install Button -->
+                        <Grid Grid.Row="0">
+                            <ui:CommandBar Background="Transparent" HorizontalAlignment="Left" Margin="8,4">
+                                <ui:AppBarToggleButton x:Name="ShowReadmeButton" Icon="Document" Label="显示Readme" IsChecked="True" Click="ShowReadmeButton_Click" />
+                                <ui:AppBarToggleButton x:Name="ShowFullPageButton" Icon="World" Label="显示完整网页" Click="ShowFullPageButton_Click" />
+                                <ui:AppBarSeparator />
+                                <ui:AppBarButton x:Name="OpenInBrowserButton" Icon="OpenWith" Label="在浏览器中打开" Click="OpenInBrowserButton_Click" />
+                            </ui:CommandBar>
+
+                            <ui:CommandBar Background="Transparent" HorizontalAlignment="Right" Margin="0,4,16,4" DefaultLabelPosition="Right">
+                                <ui:AppBarButton x:Name="InstallButton" 
+                                                 Icon="Download" 
+                                                 Label="安装插件" 
+                                                 Click="InstallButton_Click"
+                                                 Visibility="Collapsed"
+                                                 Foreground="{DynamicResource SystemAccentColorLight2Brush}" />
+                            </ui:CommandBar>
+                        </Grid>
 
                         <Grid Grid.Row="1">
                             <wv2:WebView2 x:Name="detailWebView" Visibility="Collapsed" DefaultBackgroundColor="Transparent" NavigationCompleted="detailWebView_NavigationCompleted" />
